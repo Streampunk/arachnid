@@ -15,18 +15,18 @@ The primary benefit of this approach is that, with appropriate TCP window size s
 
 Mapping of the grain logical model to HTTP headers.
 
-* `X-Arachnid-OriginTimeStamp` - PTP timestamp in `<secs>:<nanos>` notation.
-* `X-Arachnid-SyncTimeStamp` - PTP timestamp in `<secs>:<nanos>` notation.
-* `X-Arachnid-Timecode` - SMPTE 12M Timecode formatted in `HH:MM:SS[:;]FF` notation.
-* `X-Arachnid-FlowID` - UUID formatted in `xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx` notation
-* `X-Arachnid-SourceID` - UUID formatted in `xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx` notation
-* `X-Arachnid-GrainType` - Enumeration of `video`, `audio`, `data`
-* `X-Arachnid-GrainDuration` - Rational number in `<numerator>/<denominator>` format - fraction of a second.
-* `X-Arachnid-FourCC` - (optional) FourCC code representing the packing of uncompressed samples into the stream.
+* `Arachnid-OriginTimeStamp` - PTP timestamp in `<secs>:<nanos>` notation.
+* `Arachnid-SyncTimeStamp` - PTP timestamp in `<secs>:<nanos>` notation.
+* `Arachnid-Timecode` - SMPTE 12M Timecode formatted in `HH:MM:SS[:;]FF` notation.
+* `Arachnid-FlowID` - UUID formatted in `xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx` notation
+* `Arachnid-SourceID` - UUID formatted in `xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx` notation
+* `Arachnid-GrainType` - Enumeration of `video`, `audio`, `data`
+* `Arachnid-GrainDuration` - Rational number in `<numerator>/<denominator>` format - fraction of a second.
+* `Arachnid-FourCC` - (optional) FourCC code representing the packing of uncompressed samples into the stream.
 
 `Content-Type` shall be set to the registered MIME type, e.g. `video/raw` or `audio/L16`. Additional parameters shall be specified according to the defining RFC, for example:
 
-`Content-Type: video/raw; sampling=YCbCr-4:2:2; width=1920; height=1080; depth=10; colorimetry=BT709-2; interlace=1 sampling=YCbCr-4:2:2; width=1920; height=1080; depth=10; colorimetry=BT709-2; interlace=1`
+`Content-Type: video/raw; sampling=YCbCr-4:2:2; width=1920; height=1080; depth=10; colorimetry=BT709-2; interlace=1`
 
 `Content-Type: audio/L16; rate=48000; channels=2`
 
@@ -36,10 +36,10 @@ Mapping of the grain logical model to HTTP headers.
 
 Headers that deal with parallel threads, present in requests and responses unless otherwise specified.
 
-* `X-Arachnid-NextByThread` - Response only. Given the number of threads being used to transport the media, the timestamp of the next grain that this thread should request. For example, with 5 threads, the value of `X-Arachnid-NextByThread` will be `X-Arachnid-OriginTimeStamp` plus 5 times `X-Arachnid-GrainDuration`.
-* `X-Arachnid-ThreadNumber` - Thread number for this request - zero-based.
-* `X-Arachnid-TotalConcurrent` - Number of threads making requests for this content.
-* `X-Arachnid-ClientID` - An identifier for the client making requests, used so that a server can provided consistent timestamps across multiple threads at the start of a session.
+* `Arachnid-NextByThread` - Response only. Given the number of threads being used to transport the media, the timestamp of the next grain that this thread should request. For example, with 5 threads, the value of `Arachnid-NextByThread` will be `Arachnid-OriginTimeStamp` plus 5 times `Arachnid-GrainDuration`.
+* `Arachnid-ThreadNumber` - Thread number for this request - zero-based.
+* `Arachnid-TotalConcurrent` - Number of threads making requests for this content.
+* `Arachnid-ClientID` - An identifier for the client making requests, used so that a server can provided consistent timestamps across multiple threads at the start of a session.
 
 In the absence of these headers, transport is assumed to be single-threaded or the concurrency does not require the assistance of the server.
 
@@ -65,34 +65,34 @@ In pull mode, a receiver is a client that makes HTTP GET requests of a sender th
 
 Senders may cache every grain of a flow or may have a limited cache of, say, 10-30 grains. This is entirely configurable by use case. If a receiver happens to know the grain timestamps of a flow, it could start to make explicit requests for grains. It may get a cache hit or miss, depending on the size of the cache. The assumption is that most of the time, a receiver wants to get the grains that most recently flowed, to this protocol supports a startup phase followed by requests for explicit grains.
 
-The receiver starts by making a number of concurrent relative get requests of the sender as it does not yet know the timestamps in the stream, for example with 4 threads the receiver requests grains `.../-3`, `.../-2`, `.../-1` and `.../0`. The receiver sets the `X-Arachnid-ThreadNumber`, `X-Arachnid-TotalConcurrent` and `X-Arachnid-ClientID` headers to inform the server that it would like a consistent set of timestamps across the responses. The server responds with grains relative to the last grain that was emitted with relative path `0` and explicit path of _t_. The value of _t_ is returned in the response to the request for path `.../0` in header `X-Arachnid-OriginTimeStamp`. For request `.../-1` this header is _t_ - _d_ where _d_ is grain duration which is `40:080000000`, for `.../-2` it is _t_ - 2 * _d_ which is `40:040000000` etc.. 
+The receiver starts by making a number of concurrent relative get requests of the sender as it does not yet know the timestamps in the stream, for example with 4 threads the receiver requests grains `.../-3`, `.../-2`, `.../-1` and `.../0`. The receiver sets the `Arachnid-ThreadNumber`, `Arachnid-TotalConcurrent` and `Arachnid-ClientID` headers to inform the server that it would like a consistent set of timestamps across the responses. The server responds with grains relative to the last grain that was emitted with relative path `0` and explicit path of _t_. The value of _t_ is returned in the response to the request for path `.../0` in header `Arachnid-OriginTimeStamp`. For request `.../-1` this header is _t_ - _d_ where _d_ is grain duration which is `40:080000000`, for `.../-2` it is _t_ - 2 * _d_ which is `40:040000000` etc.. 
 
-The responses also contain `X-Arachnid-NextByThread` headers indicating this next grain timestamp that should be requested on that thread. If the number of threads is _c_, request `.../0` has `X-Arachnid-NextByThread` set to _t_ + _c_ * _d_, which is `40:280000000`. This is the server informing the client that - after fully completing its currrent - it should request the grain that has the given explicit timestamp, that the receiver should switch to making explicit requests. In this way, the grain rate of a stream may change mid flow. A server must reply with consistent information across all threads with the same client identifier for a period of 10 seconds from receiving the first request. 
+The responses also contain `Arachnid-NextByThread` headers indicating this next grain timestamp that should be requested on that thread. If the number of threads is _c_, request `.../0` has `Arachnid-NextByThread` set to _t_ + _c_ * _d_, which is `40:280000000`. This is the server informing the client that - after fully completing its currrent - it should request the grain that has the given explicit timestamp, that the receiver should switch to making explicit requests. In this way, the grain rate of a stream may change mid flow. A server must reply with consistent information across all threads with the same client identifier for a period of 10 seconds from receiving the first request. 
 
 To complete the example, here are the example request and response headers (with the first fairly complete):
 
 ```
 GET http://clips.newsroom.glasgow.spm.co.uk/flows/4223aa8d-9e3f-4a08-b0ba-863f26268b6f/-3 HTTP/1.1
 ...
-X-Arachnid-ThreadNumber: 0
-X-Arachnid-TotalConcurrent: 4
-X-Arachnid-ClientID: transform7_inverness
+Arachnid-ThreadNumber: 0
+Arachnid-TotalConcurrent: 4
+Arachnid-ClientID: transform7_inverness
 ...
 
 HTTP/1.1 200 OK
 ...
-X-Arachnid-ThreadNumber: 0
-X-Arachnid-TotalConcurrent: 4
-X-Arachnid-OriginTimeStamp: 40:000000000
-X-Arachnid-SyncTimeStamp: 40:000000000
-X-Arachnid-Timecode: 10:00:00:00
-X-Arachnid-FlowID: 4223aa8d-9e3f-4a08-b0ba-863f26268b6f
-X-Arachnod-SourceID: 26bb72a1-0112-495d-81ab-f5160ca69015
-X-Arachnid-NextByThread: 40:160000000
-X-Arachnid-GrainType: video
-X-Arachnid-FourCC: YUYP
-X-Arachnid-GrainDuration: 1/25
-Content-Type: video/raw; sampling=YCbCr-4:2:2; width=1920; height=1080; depth=10; colorimetry=BT709-2; interlace=1 sampling=YCbCr-4:2:2; width=1920; height=1080; depth=10; colorimetry=BT709-2; interlace=1
+Arachnid-ThreadNumber: 0
+Arachnid-TotalConcurrent: 4
+Arachnid-OriginTimeStamp: 40:000000000
+Arachnid-SyncTimeStamp: 40:000000000
+Arachnid-Timecode: 10:00:00:00
+Arachnid-FlowID: 4223aa8d-9e3f-4a08-b0ba-863f26268b6f
+Arachnod-SourceID: 26bb72a1-0112-495d-81ab-f5160ca69015
+Arachnid-NextByThread: 40:160000000
+Arachnid-GrainType: video
+Arachnid-FourCC: YUYP
+Arachnid-GrainDuration: 1/25
+Content-Type: video/raw; sampling=YCbCr-4:2:2; width=1920; height=1080; depth=10; colorimetry=BT709-2; interlace=1
 Content-Length: 5184000
 ...
 ```
@@ -100,54 +100,54 @@ Content-Length: 5184000
 ```
 GET http://clips.newsroom.glasgow.spm.co.uk/flows/4223aa8d-9e3f-4a08-b0ba-863f26268b6f/-2 HTTP/1/1
 ...
-X-Arachnid-ThreadNumber: 1
-X-Arachnid-TotalConcurrent: 4
-X-Arachnid-ClientID: transform7_inverness
+Arachnid-ThreadNumber: 1
+Arachnid-TotalConcurrent: 4
+Arachnid-ClientID: transform7_inverness
 ...
 
 HTTP/1.1 200 OK
 ...
-X-Arachnid-ThreadNumber: 1
-X-Arachnid-TotalConcurrent: 4
-X-Arachnid-OriginTimeStamp: 40:040000000
-X-Arachnid-NextByThread: 40:200000000
-X-Arachnid-GrainDuration: 1/25
+Arachnid-ThreadNumber: 1
+Arachnid-TotalConcurrent: 4
+Arachnid-OriginTimeStamp: 40:040000000
+Arachnid-NextByThread: 40:200000000
+Arachnid-GrainDuration: 1/25
 ...
 ```
 
 ```
 GET http://clips.newsroom.glasgow.spm.co.uk/flows/4223aa8d-9e3f-4a08-b0ba-863f26268b6f/-1 HTTP/1/1
 ...
-X-Arachnid-ThreadNumber: 2
-X-Arachnid-TotalConcurrent: 4
-X-Arachnid-ClientID: transform7_inverness
+Arachnid-ThreadNumber: 2
+Arachnid-TotalConcurrent: 4
+Arachnid-ClientID: transform7_inverness
 ...
 
 HTTP/1.1 200 OK
 ...
-X-Arachnid-ThreadNumber: 2
-X-Arachnid-TotalConcurrent: 4
-X-Arachnid-OriginTimeStamp: 40:080000000
-X-Arachnid-NextByThread: 40:240000000
-X-Arachnid-GrainDuration: 1/25
+Arachnid-ThreadNumber: 2
+Arachnid-TotalConcurrent: 4
+Arachnid-OriginTimeStamp: 40:080000000
+Arachnid-NextByThread: 40:240000000
+Arachnid-GrainDuration: 1/25
 ...
 ```
 
 ```
 GET http://clips.newsroom.glasgow.spm.co.uk/flows/4223aa8d-9e3f-4a08-b0ba-863f26268b6f/0 HTTP/1/1
 ...
-X-Arachnid-ThreadNumber: 3
-X-Arachnid-TotalConcurrent: 4
-X-Arachnid-ClientID: transform7_inverness
+Arachnid-ThreadNumber: 3
+Arachnid-TotalConcurrent: 4
+Arachnid-ClientID: transform7_inverness
 ...
 
 HTTP/1.1 200 OK
 ...
-X-Arachnid-ThreadNumber: 3
-X-Arachnid-TotalConcurrent: 4
-X-Arachnid-OriginTimeStamp: 40:120000000
-X-Arachnid-NextByThread: 40:2800000000
-X-Arachnid-GrainDuration: 1/25
+Arachnid-ThreadNumber: 3
+Arachnid-TotalConcurrent: 4
+Arachnid-OriginTimeStamp: 40:120000000
+Arachnid-NextByThread: 40:2800000000
+Arachnid-GrainDuration: 1/25
 ...
 ```
 
