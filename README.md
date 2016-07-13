@@ -1,13 +1,13 @@
-# Arachnid 
+# Arachnid
 ## DRAFT!
 
-Streampunk Media's draft specification of HTTP(s)-based transport of NMOS grains and flows over the world-wide-web. This specification is a prototype and is not yet complete. It is being developed in parallel with a Node.js implementation as `spm-http-in` and `spm-http-out` nodes in [dynamorse](/Streampunk/dynamorse). 
+Streampunk Media's draft specification of HTTP(s)-based transport of NMOS grains and flows over the world-wide-web. This specification is a prototype and is not yet complete. It is being developed in parallel with a Node.js implementation as `spm-http-in` and `spm-http-out` nodes in [dynamorse](/Streampunk/dynamorse).
 
-The aim of the specification is to efficiently transport NMOS grains, which are PTP timestamped video frames, chunks of audio samples or data/event media data, using parallel and overlapped HTTP requests. The specification supports push and pull modes, with a choice of unsecure HTTP or secure HTTPS protocols. The headers are common to both all methods. Transport takes place as fast as the network can carry the underlying packets and may be faster than real time. Senders may slow down the speed of their response to real time or slower. In this way, back pressure can be applied between processing endpoints.
+The aim of the specification is to efficiently transport NMOS grains, which are PTP time stamped video frames, chunks of audio samples or data/event media data, using parallel and overlapped HTTP requests. The specification supports push and pull modes, with a choice of unsecure HTTP or secure HTTPS protocols. The headers are common to both all methods. Transport takes place as fast as the network can carry the underlying packets and may be faster than real time. Senders may slow down the speed of their response to real time or slower. In this way, back pressure can be applied between processing endpoints.
 
-As a consequene of this approach, grains of a media stream do not necessarily travel in the order that they are presented and the packets on the wire will be an interleaved mix of different grains from the same flow. Clients may need to have a small buffer to re-order a few frames. This approach relies on a strong identity and timing model, as described in the JT-NM reference architecture. This is different from a signal but an approach that scales well in IT networks.
+As a consequence of this approach, grains of a media stream do not necessarily travel in the order that they are presented and the packets on the wire will be an interleaved mix of different grains from the same flow. Clients may need to have a small buffer to re-order a few frames. This approach relies on a strong identity and timing model, as described in the JT-NM reference architecture. This is different from a linear signal but an approach that scales well in IT networks.
 
-The primary benefit of this approach is that, with appropriate TCP window size settings, streams will scale to fill avaiable network pipes with unmodified operating system kernels. This allows a user a runtime choice to trade a few grains of latency for more reliability, better bandwidth utilisation, back pressure, security and defacto internet-backed routing (no need for STUN/TURN/ICE).
+The primary benefit of this approach is that, with appropriate TCP window size settings, streams will scale to fill available network pipes with unmodified operating system kernels. This allows a user a runtime choice to trade a few grains of latency for more reliability, better bandwidth utilisation, back pressure, security and de facto internet-backed routing (no need for STUN/TURN/ICE).
 
 ## Headers
 
@@ -45,7 +45,7 @@ In the absence of these headers, transport is assumed to be single-threaded or t
 
 PTP timestamps shall always contain nine digits to specify the nanosecond value and shall be zero-padded if the value could be written with less digits.
 
-#### Maximum number of parallel streams 
+#### Maximum number of parallel streams
 
 In common with the established limitation for web browsers, no more than 6 parallel requests can be made for content for the same flow. Many firewalls and servers are configured to treat more than six concurrent requests for content between client and server as a denial of service attack.
 
@@ -61,13 +61,13 @@ Relative references take the form of a positive or negative integer specifying h
 
 ## Pull
 
-In pull mode, a receiver is a client that makes HTTP GET requests of a sender that an HTTP server. 
+In pull mode, a receiver is a client that makes HTTP GET requests of a sender that is an HTTP server.
 
 Senders may cache every grain of a flow or may have a limited cache of, say, 10-30 grains. This is entirely configurable by use case. If a receiver happens to know the grain timestamps of a flow, it could start to make explicit requests for grains. It may get a cache hit or miss, depending on the size of the cache. The assumption is that most of the time, a receiver wants to get the grains that most recently flowed, to this protocol supports a startup phase followed by requests for explicit grains.
 
-The receiver starts by making a number of concurrent relative get requests of the sender as it does not yet know the timestamps in the stream, for example with 4 threads the receiver requests grains `.../-3`, `.../-2`, `.../-1` and `.../0`. The receiver sets the `Arachnid-ThreadNumber`, `Arachnid-TotalConcurrent` and `Arachnid-ClientID` headers to inform the server that it would like a consistent set of timestamps across the responses. The server responds with grains relative to the last grain that was emitted with relative path `0` and explicit path of _t_. The value of _t_ is returned in the response to the request for path `.../0` in header `Arachnid-OriginTimeStamp`. For request `.../-1` this header is _t_ - _d_ where _d_ is grain duration which is `40:080000000`, for `.../-2` it is _t_ - 2 * _d_ which is `40:040000000` etc.. 
+The receiver starts by making a number of concurrent relative get requests of the sender as it does not yet know the timestamps in the stream, for example with 4 threads the receiver requests grains `.../-3`, `.../-2`, `.../-1` and `.../0`. The receiver sets the `Arachnid-ThreadNumber`, `Arachnid-TotalConcurrent` and `Arachnid-ClientID` headers to inform the server that it would like a consistent set of timestamps across the responses. The server responds with grains relative to the last grain that was emitted with relative path `0` and explicit path of _t_. The value of _t_ is returned in the response to the request for path `.../0` in header `Arachnid-OriginTimeStamp`. For request `.../-1` this header is _t_ - _d_ where _d_ is grain duration which is `40:080000000`, for `.../-2` it is _t_ - 2 * _d_ which is `40:040000000` etc..
 
-The responses also contain `Arachnid-NextByThread` headers indicating this next grain timestamp that should be requested on that thread. If the number of threads is _c_, request `.../0` has `Arachnid-NextByThread` set to _t_ + _c_ * _d_, which is `40:280000000`. This is the server informing the client that - after fully completing its currrent - it should request the grain that has the given explicit timestamp, that the receiver should switch to making explicit requests. In this way, the grain rate of a stream may change mid flow. A server must reply with consistent information across all threads with the same client identifier for a period of 10 seconds from receiving the first request. 
+The responses also contain `Arachnid-NextByThread` headers indicating this next grain timestamp that should be requested on that thread. If the number of threads is _c_, request `.../0` has `Arachnid-NextByThread` set to _t_ + _c_ * _d_, which is `40:280000000`. This is the server informing the client that - after fully completing its current - it should request the grain that has the given explicit timestamp, that the receiver should switch to making explicit requests. In this way, the grain rate of a stream may change mid flow. A server must reply with consistent information across all threads with the same client identifier for a period of 10 seconds from receiving the first request.
 
 To complete the example, here are the example request and response headers (with the first fairly complete):
 
@@ -151,7 +151,7 @@ Arachnid-GrainDuration: 1/25
 ...
 ```
 
-Subsequent requests by thread are made to `.../40:160000000`, `.../40:200000000`, `.../40:240000000` and `.../40:280000000`, and not to `.../1`, `.../2`, `.../3` etc.. 
+Subsequent requests by thread are made to `.../40:160000000`, `.../40:200000000`, `.../40:240000000` and `.../40:280000000`, and not to `.../1`, `.../2`, `.../3` etc..
 
 Servers should be capable of answering requests for relative grains as follows:
 
@@ -159,7 +159,7 @@ Servers should be capable of answering requests for relative grains as follows:
 * Requests for grains that were cached but that are no longer available (larger negative minus number) should produce a `410 Gone` HTTP response - the resource has gone from this base path and will not be available again.
 * Requests for grains that are too far in the future should be answered with a `404 Not Found` response code as the grains may become available if requested in the future.
 
-## Push 
+## Push
 
 In push mode, a sender is a client that makes HTTP POST requests to a receiver that is an HTTP server.
 
