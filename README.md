@@ -13,15 +13,15 @@ The primary benefit of this approach is that, with appropriate TCP window size s
 
 ### Grain-specific headers
 
-Mapping of the grain logical model to HTTP headers.
+Mapping of the grain logical model to HTTP headers. (Many of the headers below will be converted to NMOS- if arachnid is adopted more widely.)
 
-* `Arachnid-OriginTimeStamp` - PTP timestamp in `<secs>:<nanos>` notation.
-* `Arachnid-SyncTimeStamp` - PTP timestamp in `<secs>:<nanos>` notation.
-* `Arachnid-Timecode` - SMPTE 12M Timecode formatted in `HH:MM:SS[:;]FF` notation.
+* `Arachnid-PTPOrigin` - PTP timestamp in `<secs>:<nanos>` notation.
+* `Arachnid-PTPSync` - PTP timestamp in `<secs>:<nanos>` notation.
+* `Arachnid-Timecode` - SMPTE 12M Timecode formatted in `HH:MM:SS[:;]FF` notation. (optional)
 * `Arachnid-FlowID` - UUID formatted in `xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx` notation
 * `Arachnid-SourceID` - UUID formatted in `xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx` notation
-* `Arachnid-GrainType` - Enumeration of `video`, `audio`, `data`
-* `Arachnid-GrainDuration` - Rational number in `<numerator>/<denominator>` format - fraction of a second.
+* `Arachnid-GrainType` - Enumeration of `video`, `audio`, `data`. (optional)
+* `Arachnid-GrainDuration` - Rational number in `<numerator>/<denominator>` format - fraction of a second. (optional)
 * `Arachnid-FourCC` - (optional) FourCC code representing the packing of uncompressed samples into the stream.
 
 `Content-Type` shall be set to the registered MIME type, e.g. `video/raw` or `audio/L16`. Additional parameters shall be specified according to the defining RFC, for example:
@@ -36,7 +36,7 @@ Mapping of the grain logical model to HTTP headers.
 
 Headers that deal with parallel threads, present in requests and responses unless otherwise specified.
 
-* `Arachnid-NextByThread` - Response only. Given the number of threads being used to transport the media, the timestamp of the next grain that this thread should request. For example, with 5 threads, the value of `Arachnid-NextByThread` will be `Arachnid-OriginTimeStamp` plus 5 times `Arachnid-GrainDuration`.
+* `Arachnid-NextByThread` - Response only. Given the number of threads being used to transport the media, the timestamp of the next grain that this thread should request. For example, with 5 threads, the value of `Arachnid-NextByThread` will be `Arachnid-PTPOrigin` plus 5 times `Arachnid-GrainDuration`.
 * `Arachnid-ThreadNumber` - Thread number for this request - zero-based.
 * `Arachnid-TotalConcurrent` - Number of threads making requests for this content.
 * `Arachnid-ClientID` - An identifier for the client making requests, used so that a server can provided consistent timestamps across multiple threads at the start of a session.
@@ -65,7 +65,7 @@ In pull mode, a receiver is a client that makes HTTP GET requests of a sender th
 
 Senders may cache every grain of a flow or may have a limited cache of, say, 10-30 grains. This is entirely configurable by use case. If a receiver happens to know the grain timestamps of a flow, it could start to make explicit requests for grains. It may get a cache hit or miss, depending on the size of the cache. The assumption is that most of the time, a receiver wants to get the grains that most recently flowed, to this protocol supports a startup phase followed by requests for explicit grains.
 
-The receiver starts by making a number of concurrent relative get requests of the sender as it does not yet know the timestamps in the stream, for example with 4 threads the receiver requests grains `.../-3`, `.../-2`, `.../-1` and `.../0`. The receiver sets the `Arachnid-ThreadNumber`, `Arachnid-TotalConcurrent` and `Arachnid-ClientID` headers to inform the server that it would like a consistent set of timestamps across the responses. The server responds with grains relative to the last grain that was emitted with relative path `0` and explicit path of _t_. The value of _t_ is returned in the response to the request for path `.../0` in header `Arachnid-OriginTimeStamp`. For request `.../-1` this header is _t_ - _d_ where _d_ is grain duration which is `40:080000000`, for `.../-2` it is _t_ - 2 * _d_ which is `40:040000000` etc..
+The receiver starts by making a number of concurrent relative get requests of the sender as it does not yet know the timestamps in the stream, for example with 4 threads the receiver requests grains `.../-3`, `.../-2`, `.../-1` and `.../0`. The receiver sets the `Arachnid-ThreadNumber`, `Arachnid-TotalConcurrent` and `Arachnid-ClientID` headers to inform the server that it would like a consistent set of timestamps across the responses. The server responds with grains relative to the last grain that was emitted with relative path `0` and explicit path of _t_. The value of _t_ is returned in the response to the request for path `.../0` in header `Arachnid-PTPOrigin`. For request `.../-1` this header is _t_ - _d_ where _d_ is grain duration which is `40:080000000`, for `.../-2` it is _t_ - 2 * _d_ which is `40:040000000` etc..
 
 The responses also contain `Arachnid-NextByThread` headers indicating this next grain timestamp that should be requested on that thread. If the number of threads is _c_, request `.../0` has `Arachnid-NextByThread` set to _t_ + _c_ * _d_, which is `40:280000000`. This is the server informing the client that - after fully completing its current - it should request the grain that has the given explicit timestamp, that the receiver should switch to making explicit requests. In this way, the grain rate of a stream may change mid flow. A server must reply with consistent information across all threads with the same client identifier for a period of 10 seconds from receiving the first request.
 
@@ -83,8 +83,8 @@ HTTP/1.1 200 OK
 ...
 Arachnid-ThreadNumber: 0
 Arachnid-TotalConcurrent: 4
-Arachnid-OriginTimeStamp: 40:000000000
-Arachnid-SyncTimeStamp: 40:000000000
+Arachnid-PTPOrigin: 40:000000000
+Arachnid-PTPSync: 40:000000000
 Arachnid-Timecode: 10:00:00:00
 Arachnid-FlowID: 4223aa8d-9e3f-4a08-b0ba-863f26268b6f
 Arachnod-SourceID: 26bb72a1-0112-495d-81ab-f5160ca69015
@@ -109,7 +109,7 @@ HTTP/1.1 200 OK
 ...
 Arachnid-ThreadNumber: 1
 Arachnid-TotalConcurrent: 4
-Arachnid-OriginTimeStamp: 40:040000000
+Arachnid-PTPOrigin: 40:040000000
 Arachnid-NextByThread: 40:200000000
 Arachnid-GrainDuration: 1/25
 ...
@@ -127,7 +127,7 @@ HTTP/1.1 200 OK
 ...
 Arachnid-ThreadNumber: 2
 Arachnid-TotalConcurrent: 4
-Arachnid-OriginTimeStamp: 40:080000000
+Arachnid-PTPOrigin: 40:080000000
 Arachnid-NextByThread: 40:240000000
 Arachnid-GrainDuration: 1/25
 ...
@@ -145,7 +145,7 @@ HTTP/1.1 200 OK
 ...
 Arachnid-ThreadNumber: 3
 Arachnid-TotalConcurrent: 4
-Arachnid-OriginTimeStamp: 40:120000000
+Arachnid-PTPOrigin: 40:120000000
 Arachnid-NextByThread: 40:2800000000
 Arachnid-GrainDuration: 1/25
 ...
