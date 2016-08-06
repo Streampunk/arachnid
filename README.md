@@ -1,13 +1,13 @@
 # Arachnid
 ## DRAFT!
 
-Streampunk Media's draft specification of HTTP(s)-based transport of NMOS grains and flows over the world-wide-web. This specification is a prototype and is not yet complete. It is being developed in parallel with a Node.js implementation as `spm-http-in` and `spm-http-out` nodes in [dynamorse](/Streampunk/dynamorse).
+Streampunk Media's draft specification of HTTP(s)-based transport of NMOS grains and flows over the world-wide-web. This specification is a prototype and is not yet complete. It is being developed in parallel with a Node.js implementation as `spm-http-in` and `spm-http-out` nodes in [dynamorse](/Streampunk/dynamorse). The primary benefit of this approach is that, with appropriate TCP window size settings, streams will scale to fill available network pipes with standard operating system kernels. This allows a user a runtime choice to trade a few grains of latency for more reliability, better bandwidth utilisation, back pressure, security and de facto internet-backed routing (no need for STUN/TURN/ICE). Grains may also be sub-divided into fragments, providing the ability to benefit from this approach and maintain lower latency with larger grain sizes.
 
-The aim of the specification is to efficiently transport NMOS grains, which are PTP time stamped video frames, chunks of audio samples or data/event media data, using parallel and overlapped HTTP requests. The specification supports push and pull modes, with a choice of unsecure HTTP or secure HTTPS protocols. The headers are common to both all methods. Transport takes place as fast as the network can carry the underlying packets and may be faster than real time. Senders may slow down the speed of their response to real time or slower. In this way, back pressure can be applied between processing endpoints.
+The aim of the specification is to efficiently transport NMOS grains, which are PTP time stamped video frames, chunks of audio samples or data/event media data, using parallel and overlapped HTTP requests. The specification supports push and pull modes, with a choice of unsecure HTTP or secure HTTPS protocols. The headers are common to both all methods. Transport takes place as fast as the network can carry the underlying packets and may be faster than real time. Receivers can pace their requests and senders may slow down the speed of their response to real time or slower. In this way, back pressure can be applied between processing endpoints.
+
+Grains by be evenly split into smaller fragments, allowing for the transport of larger grains as seperate pieces in parallel.
 
 As a consequence of this approach, grains of a media stream do not necessarily travel in the order that they are presented and the packets on the wire will be an interleaved mix of different grains from the same flow. Clients may need to have a small buffer to re-order a few frames. This approach relies on a strong identity and timing model, as described in the JT-NM reference architecture. This is different from a linear signal but an approach that scales well in IT networks.
-
-The primary benefit of this approach is that, with appropriate TCP window size settings, streams will scale to fill available network pipes with unmodified operating system kernels. This allows a user a runtime choice to trade a few grains of latency for more reliability, better bandwidth utilisation, back pressure, security and de facto internet-backed routing (no need for STUN/TURN/ICE).
 
 ## Headers
 
@@ -58,6 +58,19 @@ URLs take the form of a base path and either the grain's origin time stamp or re
 Relative references take the form of a positive or negative integer specifying how the grain to be returned relates to the current time at the server and is measured in grain counts. For example, `0` is the most recently emitted grain of a flow from a sender, `1` is the next grain to be emitted and `-1` is the previous grain. For example:
 
 `http://clips.newsroom.glasgow.spm.co.uk/flows/4223aa8d-9e3f-4a08-b0ba-863f26268b6f/-1`
+
+### Fragmented grains
+
+Implementations may support the sub-division of grains into equal sized fragments. To do this, append the number of fragments to divide the grain into and the one-based index of the part to the end of the path. For example, to subdivide a grain into four pieces and pull the second piece, use the following path:
+
+`http://clips.newsroom.glasgow.spm.co.uk/flows/4223aa8d-9e3f-4a08-b0ba-863f26268b6f/1466371328:891000000/4/2`
+
+Where the content length of a grain does not exactly sub-divide by an integer value, in and out indexes should be rounded down to the nearest value. The last fragment must contain all remaining bytes. For example, for a grain with content length 1601 subdivided into 4 parts:
+
+* Part 1 contains bytes 0 to 399.
+* Part 2 contains bytes 400 to 799.
+* Part 3 contains bytes 800 to 1199.
+* Part 4 contains bytes 1200 to 1601.
 
 ## Pull
 
