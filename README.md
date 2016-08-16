@@ -100,7 +100,7 @@ Arachnid-PTPOrigin: 40:000000000
 Arachnid-PTPSync: 40:000000000
 Arachnid-Timecode: 10:00:00:00
 Arachnid-FlowID: 4223aa8d-9e3f-4a08-b0ba-863f26268b6f
-Arachnod-SourceID: 26bb72a1-0112-495d-81ab-f5160ca69015
+Arachnid-SourceID: 26bb72a1-0112-495d-81ab-f5160ca69015
 Arachnid-NextByThread: 40:160000000
 Arachnid-GrainType: video
 Arachnid-FourCC: YUYP
