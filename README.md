@@ -1,13 +1,15 @@
 # Arachnid
-## DRAFT!
+## DRAFT! 
 
-Streampunk Media's draft specification of HTTP(s)-based transport of NMOS grains and flows over the world-wide-web. This specification is a prototype and is not yet complete. It is being developed in parallel with a Node.js implementation as `spm-http-in` and `spm-http-out` nodes in [dynamorse](/Streampunk/dynamorse). The primary benefit of this approach is that, with appropriate TCP window size settings, streams will scale to fill available network pipes with standard operating system kernels and cloud platforms. This allows a user a runtime choice to trade a few grains of latency for more reliability, better bandwidth utilisation, back pressure, security and de facto internet-backed routing (no need for STUN/TURN/ICE). Grains may also be sub-divided into fragments, providing the ability to benefit from this approach and maintain lower latency with larger grain sizes. 
+Streampunk Media's draft specification of HTTP(s)-based transport of NMOS grains and flows over the world-wide-web. This specification is a prototype and is not yet complete. It is being developed in parallel with a Node.js implementation as `spm-http-in` and `spm-http-out` nodes in [node-red-contrib-dynamorse-http-io](/Streampunk/node-red-contrib-dynamorse-http-io). The primary benefit of this approach is that, with appropriate TCP window size settings, streams will scale to fill available network pipes with standard operating system kernels and cloud platforms. This allows a user a runtime choice to trade a few grains of latency for more reliability, better bandwidth utilisation, back pressure, security and de facto internet-backed routing (no need for STUN/TURN/ICE). Grains may also be sub-divided into fragments, providing the ability to benefit from this approach and maintain lower latency with larger grain sizes. 
 
-The aim of the specification is to efficiently transport NMOS grains, which are PTP time stamped video frames, chunks of audio samples or data/event media data, using parallel and overlapped HTTP requests. The specification supports push and pull modes, with a choice of unsecure HTTP or secure HTTPS protocols. The headers are common to both all methods. Transport takes place as fast as the network can carry the underlying packets and may be faster than real time. Receivers can pace their requests and senders may slow down the speed of their response to real time or slower. In this way, back pressure can be applied between processing endpoints.
+The aim of the specification is to efficiently transport NMOS grains, which are PTP time stamped video frames, chunks of audio samples or data/event media data, using parallel and overlapped HTTP requests. The specification supports push and pull modes, with a choice of unsecure HTTP or secure HTTPS protocols. The headers are common to both methods. Transport takes place as fast as the network can carry the underlying packets and may be faster than real time. Receivers can pace their requests and senders may slow down the speed of their response to real time or slower. In this way, back pressure can be applied between processing endpoints.
 
 Grains by be evenly split into smaller fragments, allowing for the transport of larger grains as seperate pieces in parallel.
 
-As a consequence of this approach, grains of a media stream do not necessarily travel in the order that they are presented and the packets on the wire will be an interleaved mix of different grains from the same flow. Clients may need to have a small buffer to re-order a few frames. This approach relies on a strong identity and timing model, as described in the JT-NM reference architecture. This is different from a linear signal but an approach that scales well in IT networks.
+As a consequence of this approach, grains of a media stream do not necessarily travel in the order that they are presented and the packets on the wire will be an interleaved mix of different grains from the same flow. Clients may need to have a small buffer to re-order up to a few frames. This approach relies on a strong identity and timing model, as described in the JT-NM reference architecture. This is different from a linear signal but an approach that scales well in IT networks.
+
+This is not an approach that supports line-synced timing and may not be appropriate for live sports action that requires extremely low latency. However, for many current SDI workflows that can tolerate a small delay, this approach is sufficient. Note that with HTTP keep alive, TCP and TLS negociation can be done up front, meaning that after initialisation this does not have a significant impact on latency. 
 
 ## Headers
 
@@ -186,13 +188,13 @@ _Details to follow_
 
 ## Comparison to other protocols
 
-Why not use MPEG-DASH, HLS or similar? The design goal of this protocol is to avoid the use of pre-allocation and manifests and to encourage the use of parallel transport as a good alternative to RTP in a data centre. In particular, the application of this protocol is intended for optimal high-bitrate, low latency transport of uncompressed and lightly compressed streams at one quaility level whereas MPEG-DASH and HLS support lower-latency, lower-bandwidth transport of adaptive bitrate streams - arguably a different use case.
+Why not use MPEG-DASH, HLS or similar? The design goal of this protocol is to avoid the use of pre-allocation and manifests and to encourage the use of parallel transport as a good alternative to RTP in a data centre. In particular, the application of this protocol is intended for optimal high-bitrate, failry low-latency transport of uncompressed and lightly compressed streams at one quaility level whereas MPEG-DASH and HLS support lower-latency, lower-bandwidth transport of adaptive bitrate streams - arguably a different use case.
 
 However, this is a journey and it is entirely possible that this protocol will morph into something like MPEG-DASH. Watch this space!
 
 ## Next steps and future
 
-Arachnid is labelled as _Streampunk Media arachnid_ to make it clear that this is not an AMWA or NMOS RFC or specification at this time. This is intended as an open specification and will be offered to the AMWA as an RFC as soon as it is sufficiently mature.
+Arachnid is labelled as _Streampunk Media arachnid_ to make it clear that this is not an AMWA or NMOS RFC or specification at this time. This is intended as an open specification and will be offered to the AMWA as an RFC as soon as it is sufficiently mature. At some point, it may be appropriate to replace the term `arachnid` with something more appropriate.
 
 Implementation is ongoing. Further details to follow. For more information or if you have questions, contact the author Richard Cartwright (spark@streampunk.media).
 
