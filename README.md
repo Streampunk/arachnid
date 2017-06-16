@@ -85,11 +85,13 @@ An implementation that does not support grain fragmentation should return a [501
 
 In pull mode, a receiver is a client that makes HTTP GET requests of a sender that is an HTTP server.
 
-Senders may cache every grain of a flow or may have a limited cache of, say, 10-30 grains. This is entirely configurable by use case. If a receiver happens to know the grain timestamps of a flow, it could start to make explicit requests for grains. It may get a cache hit or miss, depending on the size of the cache. The assumption is that most of the time, a receiver wants to get the grains that most recently flowed, and to achieve this the protocol supports a startup redirection followed by requests for explicit grains.
+Senders may cache every grain of a flow or may have a limited cache of, say, 10-30 grains. This is entirely configurable by use case. If a receiver happens to know the grain timestamps of a flow, it could start to make explicit requests for grains. It may get a cache hit or miss, depending on the size of the cache. The assumption is that most of the time, a receiver wants to get the grains that most recently flowed, and to achieve this the protocol supports a startup redirection phase followed by requests for explicit grains.
+
+### Startup redirection phase
 
 The receiver starts by making a number of concurrent relative get requests of the sender as it does not yet know the timestamps in the stream, for example with 4 threads the receiver requests grains `.../-3`, `.../-2`, `.../-1` and `.../0`. The receiver sets the `Arachnid-ClientID` headers to inform the server that it would like a consistent set of timestamps across the responses. The server responds with a [302 found](https://http.cat/302) response with the `location` header containing the path of the grain with the highest timestamp _t_, for example `40:120000000`. For request `.../-1` the location header is _t_ - _d_ - where _d_ is grain duration - which is `40:080000000`, for `.../-2` it is _t_ - 2 * _d_ which is `40:040000000` etc..
 
-From that point onward, the client is responsible for calculating the PTP timestamp of the next frame that it requires. For a single-threaded implementation, this will be the returned `PTPOrigin` timestamp from the header plus the grain duration. This may be computed from the `GrainDuration` header or from knowledge of the media type. For concurrent connections, each thread may request a timestamp that is an increase in time over the previously received timestamp by the multiple of the number of threads by the grain duration.
+The consistency of timestamps across requests must be common to a given client ID within 5 seconds of the first requests being received.
 
 To complete the example, here are the example request and response headers (with the first fairly complete):
 
@@ -123,11 +125,9 @@ GET http://clips.newsroom.glasgow.spm.co.uk/flows/4223aa8d-9e3f-4a08-b0ba-863f26
 Arachnid-ClientID: transform7_inverness
 ...
 
-HTTP/1.1 200 OK
+HTTP/1.1 302 Found
 ...
-Arachnid-PTPOrigin: 40:080000000
-Arachnid-NextByThread: 40:240000000
-Arachnid-GrainDuration: 1/25
+Location: 40:080000000
 ...
 ```
 
@@ -137,25 +137,60 @@ GET http://clips.newsroom.glasgow.spm.co.uk/flows/4223aa8d-9e3f-4a08-b0ba-863f26
 Arachnid-ClientID: transform7_inverness
 ...
 
-HTTP/1.1 200 OK
+HTTP/1.1 302 Found
 ...
-Arachnid-PTPOrigin: 40:120000000
-Arachnid-NextByThread: 40:2800000000
-Arachnid-GrainDuration: 1/25
+Location: 40:120000000
 ...
 ```
 
-Subsequent requests by thread are made to `.../40:160000000`, `.../40:200000000`, `.../40:240000000` and `.../40:280000000`, and not to `.../1`, `.../2`, `.../3` etc..
+The pull client then follows the redirection paths, which may be relative or absolute, and makes GET requests for the frame data. For example, one of these requests might be:
 
-Servers should be capable of answering requests for relative grains as follows:
+```
+GET http://clips.newsroom.glasgow.spm.co.uk/flows/4223aa8d-9e3f-4a08-b0ba-863f26268b6f/40:080000000 HTTP/1/1
+...
+
+HTTP/1.1 200 OK
+...
+Arachnid-PTPOrigin: 40:080000000
+Arachnid-PTPSync: 40:080000000
+Arachnid-Timecode: 10:00:00:02
+Arachnid-FlowID: 4223aa8d-9e3f-4a08-b0ba-863f26268b6f
+Arachnid-SourceID: 26bb72a1-0112-495d-81ab-f5160ca69015
+Arachnid-GrainType: video
+Arachnid-FourCC: YUYP
+Arachnid-GrainDuration: 1/25
+Content-Type: video/raw; sampling=YCbCr-4:2:2; width=1920; height=1080; depth=10; colorimetry=BT709-2; interlace=1
+Content-Length: 5184000
+...
+< body is a stream of essence payload for the grain >
+```
+
+### Running phase
+
+In the example, subsequent requests by thread are made to `.../40:160000000`, `.../40:200000000`, `.../40:240000000` and `.../40:280000000`, and not to `.../1`, `.../2`, `.../3` etc..
+
+The client is responsible for calculating the PTP timestamp of the next frame that it requires. For a single-threaded implementation, this will be the returned `...-PTPOrigin` timestamp from the header plus the grain duration. This may be computed from the `GrainDuration` header or from knowledge of the media type. For concurrent connections, each thread may request a timestamp that is an increase in time over the previously received timestamp by the multiple of the number of threads by the grain duration.
+
+Servers should answer requests for relative grains as follows:
 
 * Servers should answer requests for relative frames within a range of plus or minus ten grains, or the HTTP timeout for the platform, whichever is the shorter time. Note that long-GOP grains may have a grain duration of some seconds.
 * Requests for grains that were cached but that are no longer available (larger negative minus number) should produce a `410 Gone` HTTP response - the resource has gone from this base path and will not be available again.
 * Requests for grains that are too far in the future should be answered with a `404 Not Found` response code as the grains may become available if requested in the future.
 
+For real time streams, requests should be made at a real time cadence for the grains and the client should tolerate a 404 Not Found response for the case where it is ahead of the grame, retrying the requests a few times with a short delay inbetween until a 200 OK response is then received. 
+
+### Multiple clients vs backpressure
+
+A pull server may be configured in two ways:
+
+1. Running its own internal clock and allowing multiple clients to make requests for the grains.
+2. Using the pull rate of the client to apply backpressure from the client to the streaming content source of the server. In this mode, only one client can be supported directly, although more could be added via a web cache.
+
+In the first mode, clock drift between client and server over time may mean that clients fall off the back of the available grains. In the second mode, a stream can run faster or slower than real time across computers, controlled by back pressure from the ultimate consumer.
+
 ## Push
 
-In push mode, a sender is a client that makes HTTP POST requests to a receiver that is an HTTP server.
+In push mode, a sender is a client that makes HTTP POST requests to a receiver that is an HTTP server. This approach may be useful when uploading content through a firewall to an external location, such as a cloud server.
 
 _Details to follow_
 
