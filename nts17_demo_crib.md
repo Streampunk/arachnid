@@ -1,4 +1,4 @@
-# Create AWS node-red node
+# Create AWS node-red instance
 
 * Start from a folder containing your AWS certificate (`.pem` file).
 
