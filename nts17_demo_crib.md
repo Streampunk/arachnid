@@ -38,7 +38,9 @@
 
       scp -i "sparkpunkeu.pem" ../media/sound/BBCNewsCountdown.wav ubuntu@...:.
 
+Demo the plumbing of nodes between AWS and Geneva.
 
+Finally, terminate the instance, destroying all of the work done above.
 
 ## Other details
 
