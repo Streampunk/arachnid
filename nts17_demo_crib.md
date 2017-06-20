@@ -47,5 +47,5 @@ Finally, terminate the instance, destroying all of the work done above.
 PCAP file reading:
 
     Documents/media/examples/rtp-video-rfc4175-1080i50-sync.pcap 
-    Documents/media/sdps/sdp_rfc4175_10bit_1080i50.sdp
+    file:Documents/media/sdps/sdp_rfc4175_10bit_1080i50.sdp
     
