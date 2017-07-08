@@ -174,8 +174,8 @@ The client is responsible for calculating the PTP timestamp of the next frame th
 Servers should answer requests for relative grains as follows:
 
 * Servers should answer requests for relative frames within a range of plus or minus ten grains, or the HTTP timeout for the platform, whichever is the shorter time. Note that long-GOP grains may have a grain duration of some seconds.
-* Requests for grains that were cached but that are no longer available (larger negative minus number) should produce a `410 Gone` HTTP response - the resource has gone from this base path and will not be available again.
-* Requests for grains that are too far in the future should be answered with a `404 Not Found` response code as the grains may become available if requested in the future.
+* Requests for grains that were cached but that are no longer available should produce a `410 Gone` HTTP response - the resource has gone from this base path and will not be available again.
+* Requests for grains that are too far in the future should be answered with a `404 Not Found` response code as the grains may become available if requested again in the future.
 
 For real time streams, requests should be made at a real time cadence for the grains and the client should tolerate a 404 Not Found response for the case where it is ahead of the grame, retrying the requests a few times with a short delay inbetween until a 200 OK response is then received. 
 
@@ -184,9 +184,9 @@ For real time streams, requests should be made at a real time cadence for the gr
 A pull server may be configured in two ways:
 
 1. Running its own internal clock and allowing multiple clients to make requests for the grains.
-2. Using the pull rate of the client to apply backpressure from the client to the streaming content source of the server. In this mode, only one client can be supported directly, although more could be added via a web cache.
+2. Using the pull rate of the client to apply backpressure from the client to the streaming content source of the server. In this mode, only one client can be supported directly at a time, although more could be added via, say, a web cache.
 
-In the first mode, clock drift between client and server over time may mean that clients fall off the back of the available grains. In the second mode, a stream can run faster or slower than real time across computers, controlled by back pressure from the ultimate consumer.
+In the first mode, clock drift between client and server over time may mean that clients fall off the back of the available grains. In the second mode, a stream can run faster then or slower than real time across computers, controlled by back pressure from the ultimate consumer.
 
 ## Push
 
@@ -196,7 +196,7 @@ _Details to follow_
 
 ## Protocol - HTTP and HTTPS
 
-Use HTTPS instead of HTTP. A server will require certificates that must be set up in the standard way for TLS/SSL security. Content will be encrypted between endpoints.
+HTTP or HTTPS protocols shall be supported. For HTTPS, a server will require certificates to be managed set up in the standard way for TLS/SSL security. Content will then be be encrypted between endpoints.
 
 _Details to follow_
 
