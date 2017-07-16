@@ -194,11 +194,15 @@ _To follow._
 
 ## Push
 
-In push mode, a sender is a client that makes HTTP POST requests to a receiver that is an HTTP server. This approach may be useful when uploading content through a firewall to an external location, such as a cloud server.
+In push mode, a sender is a client that makes HTTP PUT requests to a receiver that is an HTTP server. This approach may be useful when uploading content through a firewall to an external location, such as a cloud server.
 
 ### Sending grains ###
 
-_To follow._
+The sender uses the HTTP `PUT` method to send grains or fragments of grains to the receiver using absolute resource references. Grains may be fragmented and this us inidcated by the path of the PUT method. The arachnid headers must be set for the `PUT` request.
+
+In general grains should be sent in sequence, one-after-the-other, in the same order as their time stamp and should be sent without gaps or omissions. It is the receiver that is responsible for recreating a continuous stream and the receiver can only do this if the sender is well behaved, within 
+
+More than one grain may be sent at a time, allowing for parallel transport of the stream. 
 
 ### Receiving grains ###
 
