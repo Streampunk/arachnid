@@ -3,11 +3,13 @@
 
 Streampunk Media's draft specification of HTTP(S)-based transport of NMOS grains and flows over the world-wide-web. This specification is a prototype and is not yet complete. It is being developed in parallel with a Node.js implementation as `spm-http-in` and `spm-http-out` nodes in [node-red-contrib-dynamorse-http-io](/Streampunk/node-red-contrib-dynamorse-http-io). The primary benefit of this approach is that, with appropriate TCP window size/scale settings, streams will scale to fill available network pipes with standard operating system kernels and cloud platforms. This allows a user a runtime choice to trade a few grains of latency for more reliability, better bandwidth utilisation, back pressure, security and de facto internet-backed routing (no need for STUN/TURN/ICE). Grains may also be sub-divided into fragments, providing the ability to benefit from this approach and maintain lower latency with larger grain sizes.
 
-The aim of the specification is to efficiently transport JT-NM _grains_ - PTP time stamped video frames, chunks of audio samples or data/event media data - using parallel and overlapped HTTP requests. Data is transported as fast as possible. The specification supports push and pull modes, with a choice of unsecure HTTP or secure HTTPS protocols. The headers are common to both methods. Transport takes place as fast as the network can carry the underlying packets and may be faster than real time. Receivers can pace their requests and senders may slow down the speed of their response to real time or slower. In this way, back pressure can be applied between processing endpoints.
+The aim of the specification is to efficiently transport JT-NM _grains_ - PTP time stamped video frames, chunks of audio samples or data/event media data - using parallel and overlapped HTTP requests. Transport takes place as fast as the network can carry the underlying packets and may be faster than real time. The specification supports push and pull modes, with a choice of unsecure HTTP or secure HTTPS protocols. The headers are common to both methods.  Receivers can pace their requests and senders may slow down the speed of their response to real time or slower. In this way, back pressure can be applied between processing endpoints.
 
 As a consequence of this approach, grains of a media stream do not necessarily travel in the order that they are presented and the packets on the wire will be an interleaved mix of different grains from the same flow. Clients may need to have a small buffer to re-order up to a few frames or fragments. This approach relies on a strong identity and timing model, as described in the JT-NM reference architecture. This is a different approach from a linear signal but an approach that scales well in IT networks.
 
-This is not an approach that supports line-synced timing and may not be appropriate for live sports action that requires extremely low latency. However, for many current SDI workflows that can tolerate a small delay, this approach is sufficient. Where framebuffers are part of a workflow anyway, the approach may even lower latency over a real-time stream. With HTTP keep alive, TCP and TLS negotiation can be done up front, meaning that after initialisation this does not have a significant impact on latency.
+![processing chain comparisson](chains.png)
+
+This is not an approach that supports line-synced timing and may not be appropriate for live sports action that requires extremely low latency. However, for many current SDI workflows that can tolerate a small delay, this approach is sufficient. Where framebuffers are part of a workflow anyway, along with in-memory resource mapping and parallel code execution, the approach may even lower latency over a real-time stream. With HTTP keep alive, TCP and TLS negotiation can be done up front, meaning that after initialisation this does not have a significant impact on latency.
 
 ## Headers
 
@@ -56,7 +58,7 @@ URLs take the form of a base path and either the grain's origin time stamp or re
 
 `http://clips.newsroom.glasgow.spm.co.uk/flows/4223aa8d-9e3f-4a08-b0ba-863f26268b6f/1466371328:891000000`
 
-The base path should be specified as the `manifest_href` path of the associated NMOS registration and dicovery API sender object. The base path is the path without the time stamp, for example:
+The base path could be specified as the `manifest_href` path of the associated NMOS registration and dicovery API sender object or equivalent, tbd. The base path is the path without the time stamp, for example:
 
 `http://clips.newsroom.glasgow.spm.co.uk/flows/4223aa8d-9e3f-4a08-b0ba-863f26268b6f/`
 
@@ -85,11 +87,11 @@ An implementation that does not support grain fragmentation should return a [501
 
 In pull mode, a receiver is a client that makes HTTP GET requests of a sender that is an HTTP server.
 
-Senders may cache every grain of a flow or may have a limited cache of, say, 10-30 grains. This is entirely configurable by use case. If a receiver happens to know the grain timestamps of a running flow, it could start to make explicit requests for grains directly. It may get a cache hit or miss, depending on the size of the cache. The assumption is that most of the time, a receiver wants to get the grains that most recently flowed, and to achieve this the protocol supports an optional startup redirection phase followed by requests for explicit grains.
+Senders may cache every grain of a flow or may have a limited cache of, say, 10-30 grains. This is entirely configurable by use case. If a receiver happens to know the grain timestamps of a running flow, it could start to make explicit requests for grains directly. It may get a cache hit or miss, depending on the size of the cache. The assumption is that most of the time, a receiver wants to get the grains that most recently flowed. To achieve this, the protocol supports an optional startup redirection phase followed by requests for explicit grains.
 
 ### Startup redirection phase
 
-The receiver starts by making a number of concurrent relative get requests of the sender as it does not yet know the timestamps in the stream, for example with 4 threads the receiver requests grains `.../-3`, `.../-2`, `.../-1` and `.../0`. The receiver sets the `Arachnid-ClientID` headers to inform the server that it would like a consistent set of timestamps across the responses. The server responds with a [302 found](https://http.cat/302) response with the `location` header containing the path of the grain with the highest timestamp _t_, for example `40:120000000`. For request `.../-1` the location header is _t_ - _d_ - where _d_ is grain duration - which is `40:080000000`, for `.../-2` it is _t_ - 2 * _d_ which is `40:040000000` etc..
+The receiver starts by making one of more relative get requests of the sender as it does not yet know the timestamps in the stream, for example with 4 parallel threads of transport the receiver requests grains `.../-3`, `.../-2`, `.../-1` and `.../0`. The receiver sets the `Arachnid-ClientID` headers to inform the server that it would like a consistent set of timestamps across the responses. The server responds with a [302 found](https://http.cat/302) response with the `location` header containing the path of the grain with the highest timestamp _t_, for example `40:120000000`. For request `.../-1` the location header is _t_ - _d_ - where _d_ is grain duration - which is `40:080000000`, for `.../-2` it is _t_ - 2 * _d_ which is `40:040000000` etc..
 
 The consistency of timestamps across requests must be common to a given client ID within 5 seconds of the first requests being received.
 
@@ -198,13 +200,13 @@ _To follow._
 
 ## Push
 
-In push mode, a sender is a client that makes HTTP PUT requests to a receiver that is an HTTP server. This approach may be useful when uploading content through a firewall to an external location, such as a cloud server.
+In push mode, a sender is a client that makes HTTP `PUT` requests to a receiver that is an HTTP server. This approach may be useful when uploading content through a firewall to an external location, such as a cloud server.
 
 ### Sending grains ###
 
-The sender uses the HTTP `PUT` method to send grains or fragments of grains to the receiver using absolute resource references. Grains may be fragmented and this us inidcated by the path of the PUT method. The arachnid headers must be set for the `PUT` request. Grains are idempotent and can be safely retransmitted in the event of failure.
+The sender uses the HTTP `PUT` method to send grains or fragments of grains to the receiver using absolute resource references. Grains may be fragmented and this is inidcated by the path of the `PUT` method. The arachnid headers must be set for the `PUT` request. Grains are idempotent and can be safely retransmitted in the event of failure.
 
-In general, grains should be sent in sequence, one-after-the-other, in the same order as their time stamp and should be sent without gaps or omissions. It is the receiver that is responsible for recreating a continuous stream and the receiver can only do this if the sender is well behaved, within the tolerance of a cache. 
+In general, grains should be sent in sequence, one-after-the-other, in the same order as their time stamp and should be sent without gaps or omissions. It is the receiving server that is responsible for recreating a continuous stream and the receiver can only do this if the sender is well behaved, within the tolerance of a cache. 
 
 More than one grain may be sent at a time, allowing for parallel transport of the stream. 
 
@@ -252,6 +254,8 @@ The protocol does not specify the details of how the sorting is done or recommen
 
 The speed that data is streamed for each grain message body can be used to apply back pressure on the stream, along with delaying the sending of grains when [429 Too Many Requests](https://http.cat/429) are received. For example, if sending grains in sequence, the next back pressure _pull request_ should only be made once the previous `PUT` request has completed and a period equivalent to the grain duration has elapsed.
 
+To scale, a intermediate caching agent can be introduced that receives the `PUT` requests from the sending client and allows the most recently received grains to be pulled with `GET` requests.
+
 ### Ending the stream ###
 
 _Details to follow_
@@ -282,6 +286,10 @@ Implementation is ongoing. Further details to follow. For more information or if
 
 Recent refactorings have introduced the means to collect together related flows for essence, such as synchronized audio and video, into _logical cable_ groupings, which have shared back pressure. A means to use arachnid to transport all of the elementary flows contained within logical cable will be designed and provided. Flows on cables may be bidirectional. This will enable interconnection of related flows across a workflow that is deployed to a cluster of computers.
 
+### Intermediate agent hubs
+
+Investigation will be carried out of the use of _intermediate agent hubs_ that can receive push streams and allow them to be pulled, creating transport services that work and scale like the web, requiring minimal firewall configuration.
+
 ## License
 
-This specification is released under the Apache 2.0 license. Copyright 2016 Streampunk Media Ltd.
+This specification is released under the Apache 2.0 license. Copyright 2017 Streampunk Media Ltd.
