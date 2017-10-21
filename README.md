@@ -22,7 +22,9 @@ Mapping of the grain logical model to HTTP headers. (Many of the headers below w
 * `Arachnid-SourceID` - UUID formatted in `xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx` notation
 * `Arachnid-GrainType` - Enumeration of `video`, `audio`, `data`. (optional)
 * `Arachnid-GrainDuration` - Rational number in `<numerator>/<denominator>` format - fraction of a second. (optional)
-* `Arachnid-FourCC` - (optional) FourCC code representing the packing of uncompressed samples into the stream.
+* `Arachnid-Packing` - (optional) FourCC code or equivalent representing the packing of uncompressed samples into the stream. 
+
+The use of a packing parameter enables data to be transported in the format in which it was produced or consumed, such as the commonly used `V210` format, without bitwise transformation only used for transportation.
 
 `Content-Type` shall be set to the registered MIME type, e.g. `video/raw` or `audio/L16`. Additional parameters shall be specified according to the defining RFC, for example:
 
@@ -155,7 +157,7 @@ Arachnid-Timecode: 10:00:00:02
 Arachnid-FlowID: 4223aa8d-9e3f-4a08-b0ba-863f26268b6f
 Arachnid-SourceID: 26bb72a1-0112-495d-81ab-f5160ca69015
 Arachnid-GrainType: video
-Arachnid-FourCC: YUYP
+Arachnid-Packing: YUYP
 Arachnid-GrainDuration: 1/25
 Content-Type: video/raw; sampling=YCbCr-4:2:2; width=1920; height=1080; depth=10; colorimetry=BT709-2; interlace=1
 Content-Length: 5184000
@@ -208,7 +210,43 @@ More than one grain may be sent at a time, allowing for parallel transport of th
 
 ### Receiving grains ###
 
-_To follow._
+The server is set up to receive `PUT` requests at the base path, with the end of the path used as path parameters to indicate which grain or grain fragment is being received. The client starts to send grains of grain fragments in sequence or in parallel. No opening message is required and the server establishes high and low watermarks based on the initial grains received. The server responds with a [200 OK](https://http.cat/200) message containing a JSON message confirming the number of bytes streamed and the current length of the queue at the server.
+
+```
+PUT http://clips.newsroom.glasgow.spm.co.uk/flows/4223aa8d-9e3f-4a08-b0ba-863f26268b6f/40:080000000 HTTP/1/1
+Arachnid-PTPOrigin: 40:080000000
+Arachnid-PTPSync: 40:080000000
+Arachnid-Timecode: 10:00:00:02
+Arachnid-FlowID: 4223aa8d-9e3f-4a08-b0ba-863f26268b6f
+Arachnid-SourceID: 26bb72a1-0112-495d-81ab-f5160ca69015
+Arachnid-GrainType: video
+Arachnid-Packing: V210
+Arachnid-GrainDuration: 1/25
+Content-Type: video/raw; sampling=YCbCr-4:2:2; width=1920; height=1080; depth=10; colorimetry=BT709-2; interlace=1
+Content-Length: 5529600
+...
+< body is a stream of essence payload for the grain >
+
+...
+HTTP/1.1 200 OK
+...
+Content-Type: application/json
+Content-Length: 50
+
+{
+  bodyLength: 5529600,
+  receiveQueueLength: 7
+}
+
+```
+
+The server may receive grains out of order and so must keep a sorted cache of grains so that, with an appropriate delay, grains can be sent onwards in order.
+
+The protocol does not specify the details of how the sorting is done or recommend a mechanism. In a fast and reliable network when transporting a live stream - where grains fragments are transmitted many times faster than real time - the need for a sorted cache is significantly reduced. The following codes can be used to help:
+
+* In the event that the servers cache is full and cannot accept and more grains, the server may send a [429 Too Many Requests](https://http.cat/429) HTTP response indicating that the client is going too fast.
+* If a server receives the same grain twice and already has a copy of a given grain in its cache, it should send a [409 Conflict](https://http.cat/409) HTTP response.
+* If the server receives a grain with a timestamp that is before its low water mark, i.e. it has already processed grains with higher timestamps, it should respond with a [400 Bad Request](https://http.cat/400) HTTP response.
 
 ### Back pressure ###
 
