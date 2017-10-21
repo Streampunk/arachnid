@@ -3,7 +3,7 @@
 
 Streampunk Media's draft specification of HTTP(S)-based transport of NMOS grains and flows over the world-wide-web. This specification is a prototype and is not yet complete. It is being developed in parallel with a Node.js implementation as `spm-http-in` and `spm-http-out` nodes in [node-red-contrib-dynamorse-http-io](/Streampunk/node-red-contrib-dynamorse-http-io). The primary benefit of this approach is that, with appropriate TCP window size/scale settings, streams will scale to fill available network pipes with standard operating system kernels and cloud platforms. This allows a user a runtime choice to trade a few grains of latency for more reliability, better bandwidth utilisation, back pressure, security and de facto internet-backed routing (no need for STUN/TURN/ICE). Grains may also be sub-divided into fragments, providing the ability to benefit from this approach and maintain lower latency with larger grain sizes.
 
-The aim of the specification is to efficiently transport NMOS grains, which are PTP time stamped video frames, chunks of audio samples or data/event media data, using parallel and overlapped HTTP requests. The specification supports push and pull modes, with a choice of unsecure HTTP or secure HTTPS protocols. The headers are common to both methods. Transport takes place as fast as the network can carry the underlying packets and may be faster than real time. Receivers can pace their requests and senders may slow down the speed of their response to real time or slower. In this way, back pressure can be applied between processing endpoints.
+The aim of the specification is to efficiently transport JT-NM _grains_, - PTP time stamped video frames, chunks of audio samples or data/event media data - using parallel and overlapped HTTP requests. The specification supports push and pull modes, with a choice of unsecure HTTP or secure HTTPS protocols. The headers are common to both methods. Transport takes place as fast as the network can carry the underlying packets and may be faster than real time. Receivers can pace their requests and senders may slow down the speed of their response to real time or slower. In this way, back pressure can be applied between processing endpoints.
 
 As a consequence of this approach, grains of a media stream do not necessarily travel in the order that they are presented and the packets on the wire will be an interleaved mix of different grains from the same flow. Clients may need to have a small buffer to re-order up to a few frames or fragments. This approach relies on a strong identity and timing model, as described in the JT-NM reference architecture. This is a different approach from a linear signal but an approach that scales well in IT networks.
 
@@ -167,9 +167,11 @@ Content-Length: 5184000
 
 In the example, subsequent requests by thread are made to `.../40:160000000`, `.../40:200000000`, `.../40:240000000` and `.../40:280000000`, and not to `.../1`, `.../2`, `.../3` etc..
 
-The client is responsible for calculating the PTP timestamp of the next frame that it requires. For a single-threaded implementation, this will be the returned `...-PTPOrigin` timestamp from the header plus the grain duration. This may be computed from the `GrainDuration` header or from knowledge of the media type. For concurrent connections, each thread may request a timestamp that is an increase in time over the previously received timestamp by the multiple of the number of threads by the grain duration.
+The client is responsible for calculating the PTP timestamp of the next frame that it requires. For a single-threaded implementation, this will be the returned `...-PTPOrigin` timestamp from the header plus the grain duration. This may be computed from the `GrainDuration` header or from knowledge of the media type. For concurrent connections, each thread may request a timestamp that is an increase in time over the previously received timestamp by the multiple of the number of threads by the grain duration. 
 
-    May need to consider an approach to irregular event data.
+Servers should be tolerant to a small range of timestamps around the actual grain timestamp to allow for rounding errors. This should be at least 1% of the grain duration either side of the given timestamp and no more than 10%. For example, the grain at timestamp `.../40:280000000` can also be referenced with timestamps plus or minus 1/2500 of a second, i.e. in the range `.../40:279600000` to `.../40:280400000`.
+
+For irregular event data where a grain duration cannot be provided, the client should use time-relative resource references and poll. This may not be the most efficient approach and another method beyond the scope of this specification, such as a websocket-based protocol, could be considered.
 
 Servers should answer requests for relative grains as follows:
 
@@ -177,7 +179,7 @@ Servers should answer requests for relative grains as follows:
 * Requests for grains that were cached but that are no longer available should produce a [410 Gone](https://http.cat/410) HTTP response - the resource has gone from this base path and will not be available again.
 * Requests for grains that are too far in the future should be answered with a [404 Not Found](https://http.cat/404) response code as the grains may become available if requested again in the future.
 
-For real time streams, requests should be made at a real time cadence for the grains and the client should tolerate a 404 Not Found response for the case where it is ahead of the grame, retrying the requests a few times with a short delay inbetween until a [200 OK](https://http.cat/200) response is then received. 
+For real time streams, requests should be made at a real time cadence for the grains and the client should tolerate a [404 Not Found](https://http.cat/404) response for the case where it is ahead of the game, retrying the requests a few times with a short delay inbetween until a [200 OK](https://http.cat/200) response is then received. 
 
 ### Multiple clients vs backpressure
 
@@ -198,9 +200,9 @@ In push mode, a sender is a client that makes HTTP PUT requests to a receiver th
 
 ### Sending grains ###
 
-The sender uses the HTTP `PUT` method to send grains or fragments of grains to the receiver using absolute resource references. Grains may be fragmented and this us inidcated by the path of the PUT method. The arachnid headers must be set for the `PUT` request.
+The sender uses the HTTP `PUT` method to send grains or fragments of grains to the receiver using absolute resource references. Grains may be fragmented and this us inidcated by the path of the PUT method. The arachnid headers must be set for the `PUT` request. Grains are idempotent and can be safely retransmitted in the event of failure.
 
-In general grains should be sent in sequence, one-after-the-other, in the same order as their time stamp and should be sent without gaps or omissions. It is the receiver that is responsible for recreating a continuous stream and the receiver can only do this if the sender is well behaved, within 
+In general, grains should be sent in sequence, one-after-the-other, in the same order as their time stamp and should be sent without gaps or omissions. It is the receiver that is responsible for recreating a continuous stream and the receiver can only do this if the sender is well behaved, within the tolerance of a cache. 
 
 More than one grain may be sent at a time, allowing for parallel transport of the stream. 
 
