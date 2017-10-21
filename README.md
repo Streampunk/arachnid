@@ -3,17 +3,17 @@
 
 Streampunk Media's draft specification of HTTP(S)-based transport of NMOS grains and flows over the world-wide-web. This specification is a prototype and is not yet complete. It is being developed in parallel with a Node.js implementation as `spm-http-in` and `spm-http-out` nodes in [node-red-contrib-dynamorse-http-io](/Streampunk/node-red-contrib-dynamorse-http-io). The primary benefit of this approach is that, with appropriate TCP window size/scale settings, streams will scale to fill available network pipes with standard operating system kernels and cloud platforms. This allows a user a runtime choice to trade a few grains of latency for more reliability, better bandwidth utilisation, back pressure, security and de facto internet-backed routing (no need for STUN/TURN/ICE). Grains may also be sub-divided into fragments, providing the ability to benefit from this approach and maintain lower latency with larger grain sizes.
 
-The aim of the specification is to efficiently transport JT-NM _grains_, - PTP time stamped video frames, chunks of audio samples or data/event media data - using parallel and overlapped HTTP requests. The specification supports push and pull modes, with a choice of unsecure HTTP or secure HTTPS protocols. The headers are common to both methods. Transport takes place as fast as the network can carry the underlying packets and may be faster than real time. Receivers can pace their requests and senders may slow down the speed of their response to real time or slower. In this way, back pressure can be applied between processing endpoints.
+The aim of the specification is to efficiently transport JT-NM _grains_ - PTP time stamped video frames, chunks of audio samples or data/event media data - using parallel and overlapped HTTP requests. Data is transported as fast as possible. The specification supports push and pull modes, with a choice of unsecure HTTP or secure HTTPS protocols. The headers are common to both methods. Transport takes place as fast as the network can carry the underlying packets and may be faster than real time. Receivers can pace their requests and senders may slow down the speed of their response to real time or slower. In this way, back pressure can be applied between processing endpoints.
 
 As a consequence of this approach, grains of a media stream do not necessarily travel in the order that they are presented and the packets on the wire will be an interleaved mix of different grains from the same flow. Clients may need to have a small buffer to re-order up to a few frames or fragments. This approach relies on a strong identity and timing model, as described in the JT-NM reference architecture. This is a different approach from a linear signal but an approach that scales well in IT networks.
 
-This is not an approach that supports line-synced timing and may not be appropriate for live sports action that requires extremely low latency. However, for many current SDI workflows that can tolerate a small delay, this approach is sufficient. Where framebuffers are part of a workflow anyway, the approach may even lower latency over a real-time stream. Note that with HTTP keep alive, TCP and TLS negotiation can be done up front, meaning that after initialisation this does not have a significant impact on latency.
+This is not an approach that supports line-synced timing and may not be appropriate for live sports action that requires extremely low latency. However, for many current SDI workflows that can tolerate a small delay, this approach is sufficient. Where framebuffers are part of a workflow anyway, the approach may even lower latency over a real-time stream. With HTTP keep alive, TCP and TLS negotiation can be done up front, meaning that after initialisation this does not have a significant impact on latency.
 
 ## Headers
 
 ### Grain-specific headers
 
-Mapping of the grain logical model to HTTP headers. (Many of the headers below will be converted to NMOS- if arachnid is adopted more widely.)
+Mapping of the grain logical model to HTTP headers. 
 
 * `Arachnid-PTPOrigin` - PTP timestamp in `<secs>:<nanos>` notation.
 * `Arachnid-PTPSync` - PTP timestamp in `<secs>:<nanos>` notation.
@@ -24,7 +24,7 @@ Mapping of the grain logical model to HTTP headers. (Many of the headers below w
 * `Arachnid-GrainDuration` - Rational number in `<numerator>/<denominator>` format - fraction of a second. (optional)
 * `Arachnid-Packing` - (optional) FourCC code or equivalent representing the packing of uncompressed samples into the stream. 
 
-The use of a packing parameter enables data to be transported in the format in which it was produced or consumed, such as the commonly used `V210` format, without bitwise transformation only used for transportation.
+The use of a packing parameter enables data to be transported in the format in which it was produced or consumed, such as the commonly used [V210 format](https://developer.apple.com/library/content/technotes/tn2162/_index.html), without bitwise transformation only used for transportation.
 
 `Content-Type` shall be set to the registered MIME type, e.g. `video/raw` or `audio/L16`. Additional parameters shall be specified according to the defining RFC, for example:
 
@@ -250,7 +250,7 @@ The protocol does not specify the details of how the sorting is done or recommen
 
 ### Back pressure ###
 
-_To follow._
+The speed that data is streamed for each grain message body can be used to apply back pressure on the stream, along with delaying the sending of grains when [429 Too Many Requests](https://http.cat/429) are received. For example, if sending grains in sequence, the next back pressure _pull request_ should only be made once the previous `PUT` request has completed and a period equivalent to the grain duration has elapsed.
 
 ### Ending the stream ###
 
@@ -258,9 +258,7 @@ _Details to follow_
 
 ## Protocol - HTTP and HTTPS
 
-HTTP or HTTPS protocols shall be supported. For HTTPS, a server will require certificates to be managed set up in the standard way for TLS/SSL security. Content will then be be encrypted between endpoints.
-
-_Details to follow_
+HTTP or HTTPS (HTTP over TLS) protocols shall be supported. For HTTPS, a server will require certificates to be managed set up in the standard way for TLS/SSL security. Content will then be be encrypted between endpoints. Details of certificate management and security management is beyond the scope of this specification.
 
 ### Test code
 
@@ -274,9 +272,15 @@ However, this is a journey and it is entirely possible that this protocol will m
 
 ## Next steps and future
 
+### Specification 
+
 Arachnid is labelled as _Streampunk Media arachnid_ to make it clear that this is not an AMWA or NMOS RFC or specification at this time. This is intended as an open specification and will be offered to the AMWA as an RFC as soon as it is sufficiently mature. At some point, it may be appropriate to replace the term `arachnid` with something more appropriate.
 
 Implementation is ongoing. Further details to follow. For more information or if you have questions, contact the author Richard Cartwright (spark@streampunk.media).
+
+### Logical cables
+
+Recent refactorings have introduced the means to collect together related flows for essence, such as synchronized audio and video, into _logical cable_ groupings, which have shared back pressure. A means to use arachnid to transport all of the elementary flows contained within logical cable will be designed and provided. Flows on cables may be bidirectional. This will enable interconnection of related flows across a workflow that is deployed to a cluster of computers.
 
 ## License
 
