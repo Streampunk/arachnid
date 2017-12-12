@@ -1,5 +1,5 @@
 # Arachnid
-## DRAFT v3!
+## DRAFT v4!
 
 Streampunk Media's draft specification of HTTP(S)-based transport of NMOS grains and flows over the world-wide-web. This specification is a prototype and is not yet complete. It is being developed in parallel with a Node.js implementation as `spm-http-in` and `spm-http-out` nodes in [node-red-contrib-dynamorse-http-io](/Streampunk/node-red-contrib-dynamorse-http-io). The primary benefit of this approach is that, with appropriate TCP window size/scale settings, streams will scale to fill available network pipes with standard operating system kernels and cloud platforms. This allows a user a runtime choice to trade a few grains of latency for more reliability, better bandwidth utilisation, back pressure, security and de facto internet-backed routing (no need for STUN/TURN/ICE). Grains may also be sub-divided into fragments, providing the ability to benefit from this approach and maintain lower latency with larger grain sizes.
 
@@ -196,7 +196,7 @@ In the first mode, clock drift between client and server over time may mean that
 
 ### Ending the stream
 
-_To follow._
+Once the stream has finished, instead of returning [404 Not Found](https://http.cat/404) for a request for a timestamp ahead of the most recently available grain, a status of [405 Method Not Allowed](https://http.cat/405) shall be returned. The response shall include an `Allow` header with no entries. This indicates that the `GET` method will never be supported for the reosurce because the stream has ended at an earlier timestamp.
 
 ## Push
 
