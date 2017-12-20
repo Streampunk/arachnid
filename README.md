@@ -1,5 +1,5 @@
 # Arachnid
-## DRAFT v4!
+## DRAFT v5!
 
 Streampunk Media's draft specification of HTTP(S)-based transport of NMOS grains and flows over the world-wide-web. This specification is a prototype and is not yet complete. It is being developed in parallel with a Node.js implementation as `spm-http-in` and `spm-http-out` nodes in [node-red-contrib-dynamorse-http-io](/Streampunk/node-red-contrib-dynamorse-http-io). The primary benefit of this approach is that, with appropriate TCP window size/scale settings, streams will scale to fill available network pipes with standard operating system kernels and cloud platforms. This allows a user a runtime choice to trade a few grains of latency for more reliability, better bandwidth utilisation, back pressure, security and de facto internet-backed routing (no need for STUN/TURN/ICE). Grains may also be sub-divided into fragments, providing the ability to benefit from this approach and maintain lower latency with larger grain sizes.
 
@@ -38,10 +38,6 @@ The use of a packing parameter enables data to be transported in the format in w
 
 ### Arachnid protocol headers
 
-Headers that deal with parallel threads, present in requests and responses unless otherwise specified.
-
-* `Arachnid-ClientID` - An identifier for the client making requests, used so that a server can provided consistent timestamps across multiple threads at the start of a session.
-
 PTP timestamps shall always contain nine digits to specify the nanosecond value and shall be zero-padded if the value could be written with less digits.
 
 Note: The original draft of this specification had a substantially more complex set of headers for thread management. Implementation work suggested that these are not required and so the `ThreadNummber`, `TotalConcurrent` and `NextByThread` have been removed. 
@@ -64,9 +60,17 @@ The base path could be specified as the `manifest_href` path of the associated N
 
 ### Time-relative resource references
 
-Time-relative references take the form of zero or a negative integer specifying how the grain to be returned relates to the current time at the server and is measured in grain counts. For example, `0` is the most recently emitted grain of a flow from a sender, `1` is the next grain to be emitted and `-1` is the previous grain. For example:
+Time-relative references take the form of a `start` path and path parameters specifying a means to be redirected to the grain that relates to the current time at the server measured in grain counts. Designed to allow a number of parallel threads at a client to start a consistent set of requests, the path parameters are `.../start/<start_id>/<thrreads>/<thread_idx>`:
 
-`http://clips.newsroom.glasgow.spm.co.uk/flows/4223aa8d-9e3f-4a08-b0ba-863f26268b6f/-1`
+* `<start_id>` to group a set of requests which are made concurrently by a single client within a five second window; 
+* `<threads>` to specify the total number of threads;
+* `<thread_idx>` providing the thread index number (1-based). 
+
+For example, `.../start/sid42/4/4` is the most recently emitted grain of a flow from a sender for a client expecting to be able to make four parallel requests. `.../start/sid42/4/1` is a four frames back from from the head of the stream at the point that the request for the given `start_id` is made.
+
+For a single thread:
+
+`http://clips.newsroom.glasgow.spm.co.uk/flows/4223aa8d-9e3f-4a08-b0ba-863f26268b6f/start/sid4321/1/1`
 
 ### Fragmented grains
 
@@ -91,16 +95,14 @@ Senders may cache every grain of a flow or may have a limited cache of, say, 10-
 
 ### Startup redirection phase
 
-The receiver starts by making one of more relative get requests of the sender as it does not yet know the timestamps in the stream, for example with 4 parallel threads of transport the receiver requests grains `.../-3`, `.../-2`, `.../-1` and `.../0`. The receiver sets the `Arachnid-ClientID` headers to inform the server that it would like a consistent set of timestamps across the responses. The server responds with a [302 found](https://http.cat/302) response with the `location` header containing the path of the grain with the highest timestamp _t_, for example `40:120000000`. For request `.../-1` the location header is _t_ - _d_ - where _d_ is grain duration - which is `40:080000000`, for `.../-2` it is _t_ - 2 * _d_ which is `40:040000000` etc..
+The receiver starts by making one of more relative get requests of the sender as it does not yet know the timestamps in the stream, for example with 4 parallel threads of transport the receiver requests grains `.../start/sid42/4/1`, `.../start/sid42/4/2`, `.../start/sid42/4/3` and `.../start/sid42/4/4`. For the last one of these, the server responds with a [302 found](https://http.cat/302) response with the `location` header containing the path of the grain with the highest timestamp _t_, for example `40:120000000`. For request `.../start/sid42/4/3` the location header is _t_ - _d_ - where _d_ is grain duration - which is `40:080000000`, for `.../start/sid42/4/2` it is _t_ - 2 * _d_ which is `40:040000000` etc..
 
-The consistency of timestamps across requests must be common to a given client ID within 5 seconds of the first requests being received.
+The consistency of timestamps across requests must be common to a given start ID within 5 seconds of the first requests being received.
 
 To complete the example, here are the example request and response headers (with the first fairly complete):
 
 ```
-GET http://clips.newsroom.glasgow.spm.co.uk/flows/4223aa8d-9e3f-4a08-b0ba-863f26268b6f/-3 HTTP/1.1
-...
-Arachnid-ClientID: transform7_inverness
+GET http://clips.newsroom.glasgow.spm.co.uk/flows/4223aa8d-9e3f-4a08-b0ba-863f26268b6f/start/sid42/4/1 HTTP/1.1
 ...
 
 HTTP/1.1 302 Found
@@ -110,9 +112,7 @@ Location: 40:000000000
 ```
 
 ```
-GET http://clips.newsroom.glasgow.spm.co.uk/flows/4223aa8d-9e3f-4a08-b0ba-863f26268b6f/-2 HTTP/1/1
-...
-Arachnid-ClientID: transform7_inverness
+GET http://clips.newsroom.glasgow.spm.co.uk/flows/4223aa8d-9e3f-4a08-b0ba-863f26268b6f/start/sid42/4/2 HTTP/1/1
 ...
 
 HTTP/1.1 302 Found
@@ -122,9 +122,7 @@ Location: 40:040000000
 ```
 
 ```
-GET http://clips.newsroom.glasgow.spm.co.uk/flows/4223aa8d-9e3f-4a08-b0ba-863f26268b6f/-1 HTTP/1/1
-...
-Arachnid-ClientID: transform7_inverness
+GET http://clips.newsroom.glasgow.spm.co.uk/flows/4223aa8d-9e3f-4a08-b0ba-863f26268b6f/start/sid42/4/3 HTTP/1/1
 ...
 
 HTTP/1.1 302 Found
@@ -134,9 +132,7 @@ Location: 40:080000000
 ```
 
 ```
-GET http://clips.newsroom.glasgow.spm.co.uk/flows/4223aa8d-9e3f-4a08-b0ba-863f26268b6f/0 HTTP/1/1
-...
-Arachnid-ClientID: transform7_inverness
+GET http://clips.newsroom.glasgow.spm.co.uk/flows/4223aa8d-9e3f-4a08-b0ba-863f26268b6f/start/sid42/4/1 HTTP/1/1
 ...
 
 HTTP/1.1 302 Found
@@ -169,9 +165,9 @@ Content-Length: 5184000
 
 ### Running phase
 
-In the example, subsequent requests by thread are made to `.../40:160000000`, `.../40:200000000`, `.../40:240000000` and `.../40:280000000`, and not to `.../1`, `.../2`, `.../3` etc..
+In the example, subsequent requests by thread are made to `.../40:160000000`, `.../40:200000000`, `.../40:240000000` and `.../40:280000000`, and not to `.../start/sid42/4/5`, `.../start/sid42/4/6`, `.../start/sid42/4/7` etc..
 
-The client is responsible for calculating the PTP timestamp of the next frame that it requires. For a single-threaded implementation, this will be the returned `...-PTPOrigin` timestamp from the header plus the grain duration. This may be computed from the `GrainDuration` header or from knowledge of the media type. For concurrent connections, each thread may request a timestamp that is an increase in time over the previously received timestamp by the multiple of the number of threads by the grain duration. 
+The client is responsible for calculating the PTP timestamp of the next frame that it requires. For a single-threaded implementation, this will be the returned `...-PTPOrigin` timestamp from the header plus the grain duration. This may be computed from the `GrainDuration` header or from knowledge of the media type. For concurrent connections, each thread may request a timestamp that is an increase in time over the previously received timestamp by the product of the number of threads by the grain duration. 
 
 Servers should be tolerant to a small range of timestamps around the actual grain timestamp to allow for rounding errors. This should be at least 1% of the grain duration either side of the given timestamp and no more than 10%. For example, the grain at timestamp `.../40:280000000` can also be referenced with timestamps plus or minus 1/2500 of a second, i.e. in the range `.../40:279600000` to `.../40:280400000`.
 
@@ -190,7 +186,7 @@ For real time streams, requests should be made at a real time cadence for the gr
 A pull server may be configured in two ways:
 
 1. Running its own internal clock and allowing multiple clients to make requests for the grains.
-2. Using the pull rate of the client to apply backpressure from the client to the streaming content source of the server. In this mode, only one client can be supported directly at a time, although more could be added via, say, a web cache.
+2. Using the pull rate of the client to apply backpressure from the client to the streaming content source of the server. In this mode, multiple clients can still be supported with the client that has pulled the grain with the highest timestamp driving the back pressure.
 
 In the first mode, clock drift between client and server over time may mean that clients fall off the back of the available grains. In the second mode, a stream can run faster then or slower than real time across computers, controlled by back pressure from the ultimate consumer.
 
@@ -258,7 +254,19 @@ To scale, a intermediate caching agent can be introduced that receives the `PUT`
 
 ### Ending the stream ###
 
-_Details to follow_
+The stream is ended by a `PUT` request to the path of the last grain in the stream appended with `.../end` that the message is sent after the grain last grain has completed its response. For example, for a last grain at timestamp `44:080000000`:
+
+```
+PUT http://clips.newsroom.glasgow.spm.co.uk/flows/4223aa8d-9e3f-4a08-b0ba-863f26268b6f/44:080000000 HTTP/1/1
+...
+```
+is, on completion, followed by:
+```
+PUT http://clips.newsroom.glasgow.spm.co.uk/flows/4223aa8d-9e3f-4a08-b0ba-863f26268b6f/44:080000000/end HTTP/1/1
+<no body>
+```
+
+Note that for concurrent streams, the receiver may have to manage reordering the grains it recieves and ensuring that the all grains prior to the last one are received and sent onwards.
 
 ## Protocol - HTTP and HTTPS
 
